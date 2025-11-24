@@ -1,0 +1,9 @@
+/* Additional custom styles */
+.star {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.star:hover {
+  color: #fbbf24;
+}
