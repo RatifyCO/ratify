@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
 const { generateInviteToken } = require('../services/authService');
 const { sendEmailInvite } = require('../services/emailService');
+const { sendSmsInvite } = require('../services/smsService');
 const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
@@ -42,8 +43,6 @@ router.post('/send', authenticateToken, [
       return res.status(400).json({ error: 'Email or phone number is required' });
     }
 
-    const inviteToken = generateInviteToken();
-
     // Check if user with email/phone exists
     let recipient = null;
     if (recipientEmail) {
@@ -51,6 +50,25 @@ router.post('/send', authenticateToken, [
     } else if (recipientPhone) {
       recipient = await User.findOne({ phone: recipientPhone });
     }
+
+    // Prevent inviting yourself
+    if (recipient && recipient._id.toString() === sender.toString()) {
+      return res.status(400).json({ error: 'You cannot send an invitation to yourself' });
+    }
+
+    // Prevent duplicate pending/accepted invites to the same recipient
+    if (recipient) {
+      const existingInvitation = await Invitation.findOne({
+        sender,
+        recipient: recipient._id,
+        status: { $in: ['pending', 'accepted'] }
+      });
+      if (existingInvitation) {
+        return res.status(400).json({ error: 'You already have a pending or accepted invitation with this user' });
+      }
+    }
+
+    const inviteToken = generateInviteToken();
 
     const invitation = new Invitation({
       sender,
@@ -73,6 +91,8 @@ router.post('/send', authenticateToken, [
     let emailSent = false;
     let emailError = null;
     let emailPreviewUrl = null;
+    let smsSent = false;
+    let smsError = null;
     try {
       if (recipientEmail) {
         const result = await sendEmailInvite(recipientEmail, senderUser.name, inviteLink);
@@ -81,7 +101,16 @@ router.post('/send', authenticateToken, [
           emailPreviewUrl = result.previewUrl;
         }
       }
-      // SMS sending would go here with Twilio
+
+      if (recipientPhone) {
+        try {
+          const smsRes = await sendSmsInvite(recipientPhone, senderUser.name, inviteLink);
+          smsSent = !!smsRes;
+        } catch (sErr) {
+          console.error('Error sending SMS invite:', sErr);
+          smsError = sErr.message;
+        }
+      }
     } catch (err) {
       console.error('Error sending invite email:', err);
       emailError = err.message;
@@ -91,6 +120,7 @@ router.post('/send', authenticateToken, [
       message: 'Invitation sent successfully',
       invitationId: invitation._id,
       emailSent,
+      smsSent,
     };
 
     if (emailPreviewUrl) {
@@ -100,6 +130,7 @@ router.post('/send', authenticateToken, [
     // Always include invite link so users can copy/share it when email sending isn't available
     resp.inviteLink = inviteLink;
     if (emailError) resp.emailWarning = `Invitation created but email could not be sent: ${emailError}`;
+    if (smsError) resp.smsWarning = `Invitation created but SMS could not be sent: ${smsError}`;
 
     res.json(resp);
   } catch (error) {

@@ -10,6 +10,8 @@ import Dashboard from './pages/Dashboard';
 import FindFriends from './pages/FindFriends';
 import Invitations from './pages/Invitations';
 import Profile from './pages/Profile';
+import Reviews from './pages/Reviews';
+import Requests from './pages/Requests';
 import AcceptInvite from './pages/AcceptInvite';
 import './App.css';
 
@@ -46,6 +48,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Invitations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reviews"
+            element={
+              <ProtectedRoute>
+                <Reviews />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/requests"
+            element={
+              <ProtectedRoute>
+                <Requests />
               </ProtectedRoute>
             }
           />

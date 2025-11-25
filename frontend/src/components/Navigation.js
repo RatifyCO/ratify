@@ -27,6 +27,12 @@ const Navigation = () => {
               <Link to="/find-friends" className="hover:text-blue-200">
                 Find Friends
               </Link>
+              <Link to="/reviews" className="hover:text-blue-200">
+                Reviews
+              </Link>
+              <Link to="/requests" className="hover:text-blue-200">
+                Requests
+              </Link>
               <Link to="/invitations" className="hover:text-blue-200">
                 Invitations
               </Link>

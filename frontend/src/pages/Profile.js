@@ -12,6 +12,8 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [invitesSent, setInvitesSent] = useState(0);
+  const [invitesReceived, setInvitesReceived] = useState(0);
   const { user } = useAuth();
 
   const API_URL = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
@@ -35,6 +37,28 @@ const Profile = () => {
         name: response.data.name,
         bio: response.data.bio || '',
       });
+      // Fetch invitation counts (sent / received)
+      try {
+        const [allInvRes, pendingRes] = await Promise.all([
+          axios.get(`${API_URL}/invitations`),
+          axios.get(`${API_URL}/invitations/pending`),
+        ]);
+
+        const allInv = Array.isArray(allInvRes.data) ? allInvRes.data : [];
+        const pendingInv = Array.isArray(pendingRes.data) ? pendingRes.data : [];
+
+        const sentCount = allInv.filter(i => i.sender === user.id).length;
+
+        // Combine pending and invitations where recipient matches user id
+        const receivedIds = new Set();
+        pendingInv.forEach(i => receivedIds.add(i._id));
+        allInv.filter(i => i.recipient === user.id).forEach(i => receivedIds.add(i._id));
+
+        setInvitesSent(sentCount);
+        setInvitesReceived(receivedIds.size);
+      } catch (invErr) {
+        console.error('Error fetching invite counts:', invErr);
+      }
     } catch (err) {
       console.error('Profile fetch error:', err);
       setError('Error fetching profile');
@@ -111,6 +135,8 @@ const Profile = () => {
           {profile?.friends && (
             <div className="mt-6 pt-6 border-t">
               <p className="font-semibold mb-2">{profile.friends.length} Friends</p>
+              <p className="text-sm text-gray-600">Invites sent: {invitesSent}</p>
+              <p className="text-sm text-gray-600">Invites received: {invitesReceived}</p>
             </div>
           )}
         </div>

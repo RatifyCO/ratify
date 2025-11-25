@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const FindFriends = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -10,8 +12,23 @@ const FindFriends = () => {
   const [invitesSent, setInvitesSent] = useState(new Set());
   const [inviteErrors, setInviteErrors] = useState({});
   const [invitePreviews, setInvitePreviews] = useState({});
+  const [userInvitations, setUserInvitations] = useState([]);
 
   const API_URL = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
+
+  // Fetch current user's invitations to determine button states
+  useEffect(() => {
+    fetchUserInvitations();
+  }, []);
+
+  const fetchUserInvitations = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/invitations`);
+      setUserInvitations(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Error fetching user invitations:', err);
+    }
+  };
 
   // Auto-refresh search results every 5 seconds if a query is active
   useEffect(() => {
@@ -67,6 +84,17 @@ const FindFriends = () => {
     handleSearchInternal(searchQuery);
   };
 
+  const getInviteStatus = (userId) => {
+    // Check if invitation already exists with this user (pending or accepted)
+    const existingInv = userInvitations.find(
+      inv => inv.recipient?._id === userId && inv.status !== 'declined'
+    );
+    if (existingInv) {
+      return existingInv.status === 'accepted' ? 'friends' : 'pending';
+    }
+    return null;
+  };
+
   const handleInvite = async (userId, email) => {
     try {
       setInviteErrors({ ...inviteErrors, [userId]: '' });
@@ -82,6 +110,8 @@ const FindFriends = () => {
       }
 
       setInvitesSent(new Set([...invitesSent, userId]));
+      // refresh invitations list to update button states
+      await fetchUserInvitations();
       setTimeout(() => {
         const newSet = new Set(invitesSent);
         newSet.delete(userId);
@@ -158,17 +188,38 @@ const FindFriends = () => {
                 <p className="text-gray-600 mb-4 text-sm">{user.bio}</p>
               )}
 
-              <button
-                onClick={() => handleInvite(user._id, user.email)}
-                disabled={invitesSent.has(user._id)}
-                className={`w-full py-2 rounded font-semibold ${
-                  invitesSent.has(user._id)
-                    ? 'bg-green-500 text-white'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                {invitesSent.has(user._id) ? '✓ Invite Sent' : 'Send Invite'}
-              </button>
+              {(() => {
+                const status = getInviteStatus(user._id);
+                const isSending = invitesSent.has(user._id);
+
+                if (status === 'friends') {
+                  return (
+                    <button disabled className="w-full py-2 rounded font-semibold bg-gray-400 text-white cursor-not-allowed">
+                      ✓ Already Friends
+                    </button>
+                  );
+                } else if (status === 'pending') {
+                  return (
+                    <button disabled className="w-full py-2 rounded font-semibold bg-yellow-500 text-white cursor-not-allowed">
+                      ⏳ Invite Pending
+                    </button>
+                  );
+                } else {
+                  return (
+                    <button
+                      onClick={() => handleInvite(user._id, user.email)}
+                      disabled={isSending}
+                      className={`w-full py-2 rounded font-semibold ${
+                        isSending
+                          ? 'bg-green-500 text-white'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {isSending ? '✓ Sending...' : 'Send Invite'}
+                    </button>
+                  );
+                }
+              })()}
               {inviteErrors[user._id] && (
                 <p className="text-red-600 text-sm mt-2">{inviteErrors[user._id]}</p>
               )}
