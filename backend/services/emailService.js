@@ -12,6 +12,7 @@ let usingTestAccount = false;
 async function createTransporter() {
   // If user provided SMTP settings (recommended), use them
   if (process.env.EMAIL_SMTP_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+    console.log(`[emailService] Creating SMTP transporter: host=${process.env.EMAIL_SMTP_HOST}, port=${process.env.EMAIL_SMTP_PORT}, secure=${process.env.EMAIL_SMTP_SECURE}, user=${process.env.EMAIL_USER}`);
     return nodemailer.createTransport({
       host: process.env.EMAIL_SMTP_HOST,
       port: process.env.EMAIL_SMTP_PORT ? parseInt(process.env.EMAIL_SMTP_PORT, 10) : 587,
@@ -24,8 +25,10 @@ async function createTransporter() {
   }
 
   // No SMTP credentials: create an Ethereal test account so developers can preview emails
+  console.log(`[emailService] No SMTP config found. Creating Ethereal test account...`);
   const testAccount = await nodemailer.createTestAccount();
   usingTestAccount = true;
+  console.log(`[emailService] Ethereal test account created: ${testAccount.user}`);
   return nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
@@ -95,10 +98,13 @@ const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
   };
 
   try {
+    console.log(`[emailService] Sending SMTP email to: ${recipientEmail}, from: ${fromAddress}`);
     const info = await transporter.sendMail(mailOptions);
+    console.log(`[emailService] Email sent successfully via SMTP. Response:`, JSON.stringify(info));
     const previewUrl = usingTestAccount ? nodemailer.getTestMessageUrl(info) : null;
     return { info, previewUrl, provider: usingTestAccount ? 'ethereal' : 'smtp' };
   } catch (err) {
+    console.error(`[emailService] SMTP send failed for ${recipientEmail}:`, err.message);
     throw err;
   }
 };
