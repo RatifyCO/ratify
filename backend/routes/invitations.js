@@ -93,7 +93,10 @@ router.post('/send', authenticateToken, [
       emailSent,
     };
 
-    if (emailPreviewUrl) resp.emailPreviewUrl = emailPreviewUrl;
+    if (emailPreviewUrl) {
+      resp.emailPreviewUrl = emailPreviewUrl;
+      console.log('Email preview URL:', emailPreviewUrl);
+    }
     if (emailError) resp.emailWarning = `Invitation created but email could not be sent: ${emailError}`;
 
     res.json(resp);
