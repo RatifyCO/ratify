@@ -70,16 +70,25 @@ router.post('/send', authenticateToken, [
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const inviteLink = `${frontendUrl}/accept-invite/${inviteToken}`;
 
+    let emailSent = false;
+    let emailError = null;
     try {
       if (recipientEmail) {
         await sendEmailInvite(recipientEmail, senderUser.name, inviteLink);
+        emailSent = true;
       }
       // SMS sending would go here with Twilio
     } catch (emailError) {
-      console.error('Error sending invite:', emailError);
+      console.error('Error sending invite email:', emailError);
+      emailError = emailError.message;
     }
 
-    res.json({ message: 'Invitation sent successfully', invitationId: invitation._id });
+    res.json({ 
+      message: 'Invitation sent successfully', 
+      invitationId: invitation._id,
+      emailSent,
+      ...(emailError && { emailWarning: `Invitation created but email could not be sent: ${emailError}` })
+    });
   } catch (error) {
     console.error('Invitation error:', error);
     res.status(500).json({ error: 'Error sending invitation' });

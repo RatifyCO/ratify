@@ -8,8 +8,29 @@ const FindFriends = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [invitesSent, setInvitesSent] = useState(new Set());
+  const [inviteErrors, setInviteErrors] = useState({});
 
   const API_URL = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
+
+  // Auto-refresh search results every 5 seconds if a query is active
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+
+    const interval = setInterval(() => {
+      handleSearchInternal(searchQuery);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [searchQuery]);
+
+  const handleSearchInternal = async (query) => {
+    try {
+      const response = await axios.get(`${API_URL}/users/search?q=${query}`);
+      setSearchResults(response.data);
+    } catch (err) {
+      console.error('Error auto-refreshing search:', err);
+    }
+  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -34,6 +55,7 @@ const FindFriends = () => {
 
   const handleInvite = async (userId, email) => {
     try {
+      setInviteErrors({ ...inviteErrors, [userId]: '' });
       await axios.post(`${API_URL}/invitations/send`, {
         recipientEmail: email,
         message: `Join me on Ratify!`,
@@ -46,6 +68,8 @@ const FindFriends = () => {
         setInvitesSent(newSet);
       }, 3000);
     } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Error sending invite';
+      setInviteErrors({ ...inviteErrors, [userId]: errorMsg });
       console.error('Error sending invite:', err);
     }
   };
@@ -125,6 +149,9 @@ const FindFriends = () => {
               >
                 {invitesSent.has(user._id) ? '✓ Invite Sent' : 'Send Invite'}
               </button>
+              {inviteErrors[user._id] && (
+                <p className="text-red-600 text-sm mt-2">{inviteErrors[user._id]}</p>
+              )}
             </div>
           ))
         )}
