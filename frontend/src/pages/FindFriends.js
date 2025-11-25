@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 
@@ -24,34 +24,47 @@ const FindFriends = () => {
     return () => clearInterval(interval);
   }, [searchQuery]);
 
+  // Debounced live search when typing
+  const debounceRef = useRef(null);
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    // Clear previous debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleSearchInternal(searchQuery);
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery]);
+
   const handleSearchInternal = async (query) => {
+    setError('');
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/users/search?q=${query}`);
       setSearchResults(response.data);
     } catch (err) {
-      console.error('Error auto-refreshing search:', err);
+      console.error('Error auto-refreshing/searching:', err);
+      setError('Error searching users');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      if (!searchQuery.trim()) {
-        setSearchResults([]);
-        setLoading(false);
-        return;
-      }
-
-      const response = await axios.get(`${API_URL}/users/search?q=${searchQuery}`);
-      setSearchResults(response.data);
-    } catch (err) {
-      setError('Error searching users');
-    } finally {
-      setLoading(false);
+    // Manual search (calls the same internal handler)
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
     }
+    handleSearchInternal(searchQuery);
   };
 
   const handleInvite = async (userId, email) => {
