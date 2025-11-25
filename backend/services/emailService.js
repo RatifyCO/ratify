@@ -40,6 +40,17 @@ async function createTransporter() {
 // 2) SMTP (EMAIL_SMTP_* + EMAIL_USER/PASSWORD)
 // 3) Ethereal test account fallback (for developers)
 const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
+  // Log which providers appear configured (booleans only — do not print secrets)
+  try {
+    console.log('[emailService] provider availability:', {
+      MAILGUN: !!process.env.MAILGUN_API_KEY && !!process.env.MAILGUN_DOMAIN,
+      SENDINBLUE: !!process.env.SENDINBLUE_API_KEY,
+      SENDGRID: !!process.env.SENDGRID_API_KEY,
+      SMTP: !!process.env.EMAIL_SMTP_HOST && !!process.env.EMAIL_USER && !!process.env.EMAIL_PASSWORD,
+    });
+  } catch (e) {
+    console.log('[emailService] provider availability log failed');
+  }
   // 1) Prefer Mailgun HTTP API if configured (bypasses blocked SMTP on some hosts)
   if (process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN) {
     try {
