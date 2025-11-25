@@ -116,7 +116,73 @@ const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
     }
   }
 
-  // 2) Send via SendGrid HTTP API if API key present (bypasses blocked SMTP on some hosts)
+  // 2) Prefer Sendinblue (Brevo) if configured — free tier available and HTTP API works from Render
+  if (process.env.SENDINBLUE_API_KEY) {
+    try {
+      const apiKey = process.env.SENDINBLUE_API_KEY;
+      const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@ratify.app';
+      const htmlBody = `
+        <h2>You're invited to Ratify!</h2>
+        <p>${senderName} invited you to join Ratify, a platform to connect with friends and share feedback.</p>
+        <p>
+          <a href="${inviteLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Accept Invitation
+          </a>
+        </p>
+        <p>Or copy this link: ${inviteLink}</p>
+        <p>This invitation expires in 7 days.</p>
+      `;
+
+      const payload = {
+        sender: { name: senderName, email: fromAddress },
+        to: [ { email: recipientEmail } ],
+        subject: `${senderName} invited you to Ratify!`,
+        htmlContent: htmlBody
+      };
+
+      const sendViaSendinblue = (key, data) => {
+        return new Promise((resolve, reject) => {
+          const str = JSON.stringify(data);
+          const options = {
+            hostname: 'api.sendinblue.com',
+            path: '/v3/smtp/email',
+            method: 'POST',
+            headers: {
+              'api-key': key,
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(str),
+            },
+          };
+
+          const req = https.request(options, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                resolve({ statusCode: res.statusCode, body });
+              } else {
+                reject(new Error(`Sendinblue API ${res.statusCode}: ${body}`));
+              }
+            });
+          });
+
+          req.on('error', (err) => reject(err));
+          req.write(str);
+          req.end();
+        });
+      };
+
+      console.log('[emailService] Attempting Sendinblue API send to', recipientEmail);
+      const result = await sendViaSendinblue(apiKey, payload);
+      console.log('[emailService] Sendinblue send successful', result && result.statusCode);
+      return { info: result, previewUrl: null, provider: 'sendinblue' };
+    } catch (err) {
+      console.error('[emailService] Sendinblue send failed:', err.message);
+      // fall through to SendGrid or SMTP/Ethereal fallback
+    }
+  }
+
+  // 3) Send via SendGrid HTTP API if API key present (bypasses blocked SMTP on some hosts)
   if (process.env.SENDGRID_API_KEY) {
     try {
       const fromAddress = process.env.EMAIL_USER || 'no-reply@ratify.app';
