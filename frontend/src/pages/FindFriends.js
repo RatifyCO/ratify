@@ -9,6 +9,7 @@ const FindFriends = () => {
   const [error, setError] = useState('');
   const [invitesSent, setInvitesSent] = useState(new Set());
   const [inviteErrors, setInviteErrors] = useState({});
+  const [invitePreviews, setInvitePreviews] = useState({});
 
   const API_URL = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
 
@@ -56,10 +57,16 @@ const FindFriends = () => {
   const handleInvite = async (userId, email) => {
     try {
       setInviteErrors({ ...inviteErrors, [userId]: '' });
-      await axios.post(`${API_URL}/invitations/send`, {
+      const response = await axios.post(`${API_URL}/invitations/send`, {
         recipientEmail: email,
         message: `Join me on Ratify!`,
       });
+
+      // If server returned a preview URL or direct invite link, save it so user can copy
+      const preview = response.data?.emailPreviewUrl || response.data?.inviteLink || null;
+      if (preview) {
+        setInvitePreviews({ ...invitePreviews, [userId]: preview });
+      }
 
       setInvitesSent(new Set([...invitesSent, userId]));
       setTimeout(() => {
@@ -151,6 +158,20 @@ const FindFriends = () => {
               </button>
               {inviteErrors[user._id] && (
                 <p className="text-red-600 text-sm mt-2">{inviteErrors[user._id]}</p>
+              )}
+              {invitePreviews[user._id] && (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-700 mb-1">Invite link / preview:</p>
+                  <div className="flex gap-2">
+                    <a href={invitePreviews[user._id]} target="_blank" rel="noreferrer" className="text-blue-600 underline truncate">{invitePreviews[user._id]}</a>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(invitePreviews[user._id])}
+                      className="px-3 py-1 bg-gray-100 rounded text-sm"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           ))

@@ -97,6 +97,8 @@ router.post('/send', authenticateToken, [
       resp.emailPreviewUrl = emailPreviewUrl;
       console.log('Email preview URL:', emailPreviewUrl);
     }
+    // Always include invite link so users can copy/share it when email sending isn't available
+    resp.inviteLink = inviteLink;
     if (emailError) resp.emailWarning = `Invitation created but email could not be sent: ${emailError}`;
 
     res.json(resp);
