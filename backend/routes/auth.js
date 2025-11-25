@@ -6,6 +6,18 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
+// Get auth endpoints info
+router.get('/', (req, res) => {
+  res.json({
+    message: 'Auth API endpoints',
+    endpoints: [
+      'POST /api/auth/signup - Create a new user',
+      'POST /api/auth/login - Login user',
+      'GET /api/auth/me - Get current user (requires auth token)',
+    ],
+  });
+});
+
 // Signup
 router.post('/signup', [
   body('name').notEmpty().withMessage('Name is required'),

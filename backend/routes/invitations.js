@@ -8,6 +8,22 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
+// Get all invitations (authenticated users only)
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const invitations = await Invitation.find({
+      $or: [{ sender: userId }, { recipient: userId }]
+    })
+      .populate('sender recipient', 'name profilePicture')
+      .sort({ createdAt: -1 });
+    res.json(invitations);
+  } catch (error) {
+    console.error('Error fetching invitations:', error);
+    res.status(500).json({ error: 'Error fetching invitations' });
+  }
+});
+
 // Send invitation via email or phone
 router.post('/send', authenticateToken, [
   body('recipientEmail').optional().isEmail().withMessage('Valid email is required'),

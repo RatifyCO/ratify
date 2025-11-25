@@ -6,6 +6,20 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
+// Get all ratings (public endpoint)
+router.get('/', async (req, res) => {
+  try {
+    const ratings = await Rating.find()
+      .populate('rater ratee', 'name profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json(ratings);
+  } catch (error) {
+    console.error('Error fetching ratings:', error);
+    res.status(500).json({ error: 'Error fetching ratings' });
+  }
+});
+
 // Create or update a rating
 router.post('/', authenticateToken, [
   body('ratee').notEmpty().withMessage('User to rate is required'),
