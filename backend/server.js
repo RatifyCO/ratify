@@ -36,6 +36,29 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
+// Root landing page for quick verification in browser
+app.get('/', (req, res) => {
+  res.send(
+    `
+      <html>
+        <head><title>Ratify Backend</title></head>
+        <body style="font-family: Arial, sans-serif; line-height:1.6; margin:40px;">
+          <h1>Ratify Backend</h1>
+          <p>API is running. Use the API routes under <code>/api/</code>.</p>
+          <ul>
+            <li><a href="/api/health">/api/health</a> — health check</li>
+            <li><a href="/api/auth">/api/auth</a> — authentication routes</li>
+            <li><a href="/api/users">/api/users</a> — user routes</li>
+            <li><a href="/api/ratings">/api/ratings</a> — ratings routes</li>
+            <li><a href="/api/invitations">/api/invitations</a> — invitation routes</li>
+          </ul>
+          <p>If you see "Cannot GET /" after this change, try redeploying the service so the new code is used.</p>
+        </body>
+      </html>
+    `
+  );
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
