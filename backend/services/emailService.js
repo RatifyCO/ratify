@@ -1,31 +1,45 @@
 const nodemailer = require('nodemailer');
 
-// Support Gmail by default, or custom SMTP (e.g., Outlook) when SMTP env vars are provided.
-let transporter;
-if (process.env.EMAIL_SMTP_HOST) {
-  // Use explicit SMTP settings (recommended for Outlook/Office365)
-  transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SMTP_HOST,
-    port: process.env.EMAIL_SMTP_PORT ? parseInt(process.env.EMAIL_SMTP_PORT, 10) : 587,
-    secure: process.env.EMAIL_SMTP_SECURE === 'true', // true for 465, false for other ports
+let transporter = null;
+let usingTestAccount = false;
+
+async function createTransporter() {
+  // If user provided SMTP settings (recommended), use them
+  if (process.env.EMAIL_SMTP_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+    return nodemailer.createTransport({
+      host: process.env.EMAIL_SMTP_HOST,
+      port: process.env.EMAIL_SMTP_PORT ? parseInt(process.env.EMAIL_SMTP_PORT, 10) : 587,
+      secure: process.env.EMAIL_SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+  }
+
+  // No credentials: create an Ethereal test account so developers can preview emails
+  const testAccount = await nodemailer.createTestAccount();
+  usingTestAccount = true;
+  return nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-} else {
-  transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
+      user: testAccount.user,
+      pass: testAccount.pass,
     },
   });
 }
 
 const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
+  if (!transporter) {
+    transporter = await createTransporter();
+  }
+
+  const fromAddress = process.env.EMAIL_USER || `"Ratify (test)" <${transporter.options.auth.user}>`;
+
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: fromAddress,
     to: recipientEmail,
     subject: `${senderName} invited you to Ratify!`,
     html: `
@@ -41,7 +55,13 @@ const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
     `,
   };
 
-  return transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    const previewUrl = usingTestAccount ? nodemailer.getTestMessageUrl(info) : null;
+    return { info, previewUrl };
+  } catch (err) {
+    throw err;
+  }
 };
 
 module.exports = { sendEmailInvite };

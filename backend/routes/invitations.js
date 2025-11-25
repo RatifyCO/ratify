@@ -72,23 +72,31 @@ router.post('/send', authenticateToken, [
 
     let emailSent = false;
     let emailError = null;
+    let emailPreviewUrl = null;
     try {
       if (recipientEmail) {
-        await sendEmailInvite(recipientEmail, senderUser.name, inviteLink);
-        emailSent = true;
+        const result = await sendEmailInvite(recipientEmail, senderUser.name, inviteLink);
+        emailSent = !!result;
+        if (result && result.previewUrl) {
+          emailPreviewUrl = result.previewUrl;
+        }
       }
       // SMS sending would go here with Twilio
-    } catch (emailError) {
-      console.error('Error sending invite email:', emailError);
-      emailError = emailError.message;
+    } catch (err) {
+      console.error('Error sending invite email:', err);
+      emailError = err.message;
     }
 
-    res.json({ 
-      message: 'Invitation sent successfully', 
+    const resp = {
+      message: 'Invitation sent successfully',
       invitationId: invitation._id,
       emailSent,
-      ...(emailError && { emailWarning: `Invitation created but email could not be sent: ${emailError}` })
-    });
+    };
+
+    if (emailPreviewUrl) resp.emailPreviewUrl = emailPreviewUrl;
+    if (emailError) resp.emailWarning = `Invitation created but email could not be sent: ${emailError}`;
+
+    res.json(resp);
   } catch (error) {
     console.error('Invitation error:', error);
     res.status(500).json({ error: 'Error sending invitation' });
