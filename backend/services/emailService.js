@@ -40,7 +40,72 @@ async function createTransporter() {
 // 2) SMTP (EMAIL_SMTP_* + EMAIL_USER/PASSWORD)
 // 3) Ethereal test account fallback (for developers)
 const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
-  // 1) Send via SendGrid HTTP API if API key present (bypasses blocked SMTP on some hosts)
+  // 1) Prefer Mailgun HTTP API if configured (bypasses blocked SMTP on some hosts)
+  if (process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN) {
+    try {
+      const domain = process.env.MAILGUN_DOMAIN;
+      const apiKey = process.env.MAILGUN_API_KEY;
+      const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@ratify.app';
+      const htmlBody = `
+        <h2>You're invited to Ratify!</h2>
+        <p>${senderName} invited you to join Ratify, a platform to connect with friends and share feedback.</p>
+        <p>
+          <a href="${inviteLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Accept Invitation
+          </a>
+        </p>
+        <p>Or copy this link: ${inviteLink}</p>
+        <p>This invitation expires in 7 days.</p>
+      `;
+
+      const params = new URLSearchParams();
+      params.append('from', fromAddress);
+      params.append('to', recipientEmail);
+      params.append('subject', `${senderName} invited you to Ratify!`);
+      params.append('html', htmlBody);
+
+      const sendViaMailgun = (key, domain, bodyStr) => {
+        return new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'api.mailgun.net',
+            path: `/v3/${domain}/messages`,
+            method: 'POST',
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`api:${key}`).toString('base64'),
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Content-Length': Buffer.byteLength(bodyStr),
+            },
+          };
+
+          const req = https.request(options, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                resolve({ statusCode: res.statusCode, body });
+              } else {
+                reject(new Error(`Mailgun API ${res.statusCode}: ${body}`));
+              }
+            });
+          });
+
+          req.on('error', (err) => reject(err));
+          req.write(bodyStr);
+          req.end();
+        });
+      };
+
+      console.log('[emailService] Attempting Mailgun API send to', recipientEmail);
+      const result = await sendViaMailgun(apiKey, domain, params.toString());
+      console.log('[emailService] Mailgun send successful', result && result.statusCode);
+      return { info: result, previewUrl: null, provider: 'mailgun' };
+    } catch (err) {
+      console.error('[emailService] Mailgun send failed:', err.message);
+      // fall through to SendGrid or SMTP/Ethereal fallback
+    }
+  }
+
+  // 2) Send via SendGrid HTTP API if API key present (bypasses blocked SMTP on some hosts)
   if (process.env.SENDGRID_API_KEY) {
     try {
       const fromAddress = process.env.EMAIL_USER || 'no-reply@ratify.app';
