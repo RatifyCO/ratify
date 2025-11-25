@@ -1,4 +1,10 @@
 const nodemailer = require('nodemailer');
+let sgMail;
+try {
+  sgMail = require('@sendgrid/mail');
+} catch (e) {
+  sgMail = null;
+}
 
 let transporter = null;
 let usingTestAccount = false;
@@ -17,7 +23,7 @@ async function createTransporter() {
     });
   }
 
-  // No credentials: create an Ethereal test account so developers can preview emails
+  // No SMTP credentials: create an Ethereal test account so developers can preview emails
   const testAccount = await nodemailer.createTestAccount();
   usingTestAccount = true;
   return nodemailer.createTransport({
@@ -31,7 +37,40 @@ async function createTransporter() {
   });
 }
 
+// sendEmailInvite supports three modes (priority):
+// 1) SendGrid HTTP API when SENDGRID_API_KEY is provided
+// 2) SMTP (EMAIL_SMTP_* + EMAIL_USER/PASSWORD)
+// 3) Ethereal test account fallback (for developers)
 const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
+  // 1) Send via SendGrid if API key present
+  if (process.env.SENDGRID_API_KEY && sgMail) {
+    try {
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      const fromAddress = process.env.EMAIL_USER || 'no-reply@ratify.app';
+      const msg = {
+        to: recipientEmail,
+        from: fromAddress,
+        subject: `${senderName} invited you to Ratify!`,
+        html: `
+          <h2>You're invited to Ratify!</h2>
+          <p>${senderName} invited you to join Ratify, a platform to connect with friends and share feedback.</p>
+          <p>
+            <a href="${inviteLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+              Accept Invitation
+            </a>
+          </p>
+          <p>Or copy this link: ${inviteLink}</p>
+          <p>This invitation expires in 7 days.</p>
+        `,
+      };
+      const result = await sgMail.send(msg);
+      return { info: result, previewUrl: null, provider: 'sendgrid' };
+    } catch (err) {
+      throw new Error(`SendGrid error: ${err.message}`);
+    }
+  }
+
+  // 2/3) SMTP or Ethereal via nodemailer
   if (!transporter) {
     transporter = await createTransporter();
   }
@@ -58,7 +97,7 @@ const sendEmailInvite = async (recipientEmail, senderName, inviteLink) => {
   try {
     const info = await transporter.sendMail(mailOptions);
     const previewUrl = usingTestAccount ? nodemailer.getTestMessageUrl(info) : null;
-    return { info, previewUrl };
+    return { info, previewUrl, provider: usingTestAccount ? 'ethereal' : 'smtp' };
   } catch (err) {
     throw err;
   }
