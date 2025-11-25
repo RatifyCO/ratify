@@ -67,7 +67,8 @@ router.post('/send', authenticateToken, [
     // If not, they'll receive email/SMS with the invite link
 
     const senderUser = await User.findById(sender);
-    const inviteLink = `${process.env.FRONTEND_URL}/accept-invite/${inviteToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const inviteLink = `${frontendUrl}/accept-invite/${inviteToken}`;
 
     try {
       if (recipientEmail) {
